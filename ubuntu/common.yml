@@ -54,6 +54,11 @@
         url: "https://github.com/containernetworking/plugins/releases/download/v1.6.0/cni-plugins-linux-amd64-v1.6.0.tgz"
         dest: "/tmp/cni-plugins.tgz"
         mode: '0644'
+    - name: Ensure CNI binary directory exists
+      file:
+        path: /opt/cni/bin
+        state: directory
+        mode: '0755'
 
     - name: Extract CNI plugins
       ansible.builtin.unarchive:
