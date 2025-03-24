@@ -24,7 +24,6 @@
           - ca-certificates
           - gpg
         state: present
-        update_cache: yes
 
     - name: Download containerd
       ansible.builtin.get_url:
