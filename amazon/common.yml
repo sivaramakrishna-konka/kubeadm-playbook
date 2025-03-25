@@ -1,0 +1,117 @@
+---
+- name: Install and configure Kubernetes components on RHEL-based systems
+  hosts: all
+  become: yes
+  tasks:
+
+    - name: Disable SELinux temporarily
+      ansible.builtin.command: setenforce 0
+      changed_when: false
+
+    - name: Make SELinux permissive permanently
+      ansible.builtin.replace:
+        path: /etc/selinux/config
+        regexp: '^SELINUX=enforcing'
+        replace: 'SELINUX=permissive'
+
+    - name: Enable IP forwarding
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/k8s.conf
+        content: |
+          net.ipv4.ip_forward = 1
+      notify: Reload sysctl
+
+    - name: Apply sysctl changes
+      ansible.builtin.command: sysctl --system
+      changed_when: false
+
+    - name: Ensure dependencies are installed
+      ansible.builtin.yum:
+        name:
+          - wget
+          - curl
+          - yum-utils
+          - device-mapper-persistent-data
+          - lvm2
+        state: present
+
+    - name: Add Kubernetes repository
+      ansible.builtin.copy:
+        dest: /etc/yum.repos.d/kubernetes.repo
+        content: |
+          [kubernetes]
+          name=Kubernetes
+          baseurl=https://pkgs.k8s.io/core:/stable:/v1.32/rpm/
+          enabled=1
+          gpgcheck=1
+          gpgkey=https://pkgs.k8s.io/core:/stable:/v1.32/rpm/repodata/repomd.xml.key
+          exclude=kubelet kubeadm kubectl cri-tools kubernetes-cni
+      notify: Clean yum cache
+
+    - name: Install Kubernetes packages
+      ansible.builtin.yum:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+        disable_excludes: kubernetes
+      retries: 5
+      delay: 10
+      register: result
+      until: result is success
+
+    - name: Hold Kubernetes packages
+      ansible.builtin.command: yum versionlock kubelet kubeadm kubectl
+      changed_when: false
+
+    - name: Enable kubelet service
+      ansible.builtin.systemd:
+        name: kubelet
+        enabled: yes
+        state: started
+
+    - name: Install containerd dependencies
+      ansible.builtin.yum:
+        name:
+          - containerd.io
+        state: present
+
+    - name: Create containerd configuration directory
+      ansible.builtin.file:
+        path: /etc/containerd
+        state: directory
+        mode: '0755'
+
+    - name: Generate default containerd config
+      ansible.builtin.command: containerd config default
+      register: containerd_config
+      changed_when: false
+
+    - name: Configure containerd
+      ansible.builtin.copy:
+        dest: /etc/containerd/config.toml
+        content: "{{ containerd_config.stdout | regex_replace('SystemdCgroup = false', 'SystemdCgroup = true') }}"
+        mode: '0644'
+      notify: Restart containerd
+
+    - name: Reload systemd and enable containerd
+      ansible.builtin.systemd:
+        name: containerd
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+  handlers:
+    - name: Reload sysctl
+      ansible.builtin.command: sysctl --system
+      changed_when: false
+
+    - name: Restart containerd
+      ansible.builtin.systemd:
+        name: containerd
+        state: restarted
+
+    - name: Clean yum cache
+      ansible.builtin.command: yum clean all
+      changed_when: false

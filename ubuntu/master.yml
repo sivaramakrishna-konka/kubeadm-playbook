@@ -21,37 +21,37 @@
 
     - name: Ensure .kube directory exists
       ansible.builtin.file:
-        path: /home/ubuntu/.kube
+        path: /home/ec2-user/.kube
         state: directory
-        owner: ubuntu
-        group: ubuntu
+        owner: ec2-user
+        group: ec2-user
         mode: '0755'
 
     - name: Copy kubeconfig file
       ansible.builtin.copy:
         src: /etc/kubernetes/admin.conf
-        dest: /home/ubuntu/.kube/config
+        dest: /home/ec2-user/.kube/config
         remote_src: yes
-        owner: ubuntu
-        group: ubuntu
+        owner: ec2-user
+        group: ec2-user
         mode: '0644'
 
     - name: Set KUBECONFIG environment variable in .bashrc
       ansible.builtin.lineinfile:
-        path: /home/ubuntu/.bashrc
-        line: 'export KUBECONFIG=/home/ubuntu/.kube/config'
+        path: /home/ec2-user/.bashrc
+        line: 'export KUBECONFIG=/home/ec2-user/.kube/config'
         create: yes
         state: present
 
     - name: Download Calico manifest if not exists
       ansible.builtin.get_url:
         url: "https://raw.githubusercontent.com/projectcalico/calico/v3.29.2/manifests/calico.yaml"
-        dest: "/home/ubuntu/calico.yaml"
+        dest: "/home/ec2-user/calico.yaml"
         mode: '0644'
 
     - name: Apply Calico network plugin
-      ansible.builtin.command: kubectl apply -f /home/ubuntu/calico.yaml
-      become_user: ubuntu
+      ansible.builtin.command: kubectl apply -f /home/ec2-user/calico.yaml
+      become_user: ec2-user
       args:
         creates: /etc/cni/net.d/calico-kubeconfig
 
@@ -77,7 +77,7 @@
 
     - name: Add alias for kubectl in .bashrc
       ansible.builtin.lineinfile:
-        path: /home/ubuntu/.bashrc
+        path: /home/ec2-user/.bashrc
         line: "alias k='kubectl'"
         create: yes
         state: present
@@ -113,5 +113,3 @@
             "value": "--kubelet-insecure-tls"
           }
         ]'
-
-
